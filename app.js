@@ -7,8 +7,8 @@ if (!username) {
   localStorage.setItem("username", username);
 }
 
-// 🆔 unique client id
-let clientId = Math.random().toString(36).substring(2);
+// 🆔 client id
+const clientId = Math.random().toString(36).substring(2);
 
 // 🔌 connect to Ably
 const ably = new Ably.Realtime({
@@ -21,47 +21,52 @@ ably.connection.on("connected", () => {
   console.log("✅ Connected to Ably");
 });
 
-// 📡 channels
-const chatChannel = ably.channels.get("chat");
-const presenceChannel = ably.channels.get("presence");
+// 📡 channel
+const channel = ably.channels.get("chat");
 
-// 💬 ADD MESSAGE TO UI
+// 💬 ADD MESSAGE TO SCREEN
 function addMessage(text, name, senderId) {
   const messages = document.getElementById("messages");
 
   if (!messages) {
-    console.error("❌ messages div not found");
+    console.error("❌ messages div missing");
     return;
   }
 
-  const div = document.createElement("div");
-  div.classList.add("message");
+  const msg = document.createElement("div");
+  msg.classList.add("message");
 
   if (senderId === clientId) {
-    div.classList.add("me");
+    msg.classList.add("me");
   } else {
-    div.classList.add("other");
+    msg.classList.add("other");
   }
 
-  div.innerHTML = `
+  msg.innerHTML = `
     <div class="name">${name}</div>
     <div class="bubble">${text}</div>
   `;
 
-  messages.appendChild(div);
-  div.scrollIntoView();
+  messages.appendChild(msg);
+  messages.scrollTop = messages.scrollHeight;
 }
 
-// 📨 SEND MESSAGE
+// 📨 SEND MESSAGE (FIXED)
 function sendMessage() {
   const input = document.getElementById("input");
 
-  if (!input || !input.value) return;
+  if (!input || input.value.trim() === "") return;
 
-  console.log("📤 Sending:", input.value);
+  const text = input.value.trim();
 
-  chatChannel.publish("message", {
-    text: input.value,
+  console.log("📤 Sending:", text);
+
+  // ✅ SHOW MESSAGE IMMEDIATELY
+  addMessage(text, username, clientId);
+
+  // send to Ably
+  channel.publish("message", {
+    text: text,
     username: username,
     sender: clientId
   });
@@ -70,8 +75,11 @@ function sendMessage() {
 }
 
 // 📥 RECEIVE MESSAGES
-chatChannel.subscribe("message", (msg) => {
+channel.subscribe("message", (msg) => {
   console.log("📩 Received:", msg);
+
+  // ❌ skip your own messages (already shown)
+  if (msg.data.sender === clientId) return;
 
   addMessage(
     msg.data.text,
@@ -80,54 +88,7 @@ chatChannel.subscribe("message", (msg) => {
   );
 });
 
-// 🟢 PRESENCE (ONLINE USERS)
-
-// join presence
-presenceChannel.presence.enter({
-  username: username
-});
-
-// update sidebar
-function updateUsers() {
-  presenceChannel.presence.get((err, members) => {
-    if (err) {
-      console.error("❌ Presence error:", err);
-      return;
-    }
-
-    const usersDiv = document.getElementById("users");
-
-    if (!usersDiv) {
-      console.error("❌ users div not found");
-      return;
-    }
-
-    usersDiv.innerHTML = "";
-
-    members.forEach(member => {
-      const div = document.createElement("div");
-      div.classList.add("user");
-
-      div.innerHTML = `
-        <div class="dot"></div>
-        ${member.data.username}
-      `;
-
-      usersDiv.appendChild(div);
-    });
-  });
-}
-
-// listen for join/leave
-presenceChannel.presence.subscribe(() => {
-  console.log("👥 Presence updated");
-  updateUsers();
-});
-
-// initial load
-setTimeout(updateUsers, 1000);
-
-// ⌨️ ENTER KEY TO SEND
+// ⌨️ ENTER TO SEND
 document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("input");
 
@@ -140,5 +101,5 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// 🧪 TEST MESSAGE (REMOVE LATER)
-addMessage("✅ Chat loaded successfully", "System", "system");
+// 🧪 TEST MESSAGE (should ALWAYS show)
+addMessage("✅ Chat is working", "System", "system");
