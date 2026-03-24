@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RTC Chat</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="sidebar">
+    <h3>Online</h3>
+    <div id="users"></div>
+  </div>
+
+  <div class="chat">
+    <div id="messages"></div>
+
+    <div class="input-bar">
+      <input id="input" placeholder="Type a message..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
