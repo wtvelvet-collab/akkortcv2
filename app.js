@@ -10,28 +10,28 @@ if (!username) {
 // 🆔 client id
 const clientId = Math.random().toString(36).substring(2);
 
-// 🔌 connect to Ably
+// 🔌 connect
 const ably = new Ably.Realtime({
   authUrl: "/.netlify/functions/token",
   clientId: clientId
 });
 
-// debug connection
+// debug
 ably.connection.on("connected", () => {
   console.log("✅ Connected to Ably");
 });
 
-// 📡 channel
-const channel = ably.channels.get("chat");
+// 📡 channel WITH history
+const channel = ably.channels.get("chat", {
+  params: { rewind: "50" }
+});
 
-// 💬 ADD MESSAGE TO SCREEN
+// 🟢 presence
+const presence = ably.channels.get("presence");
+
+// 💬 add message
 function addMessage(text, name, senderId) {
   const messages = document.getElementById("messages");
-
-  if (!messages) {
-    console.error("❌ messages div missing");
-    return;
-  }
 
   const msg = document.createElement("div");
   msg.classList.add("message");
@@ -51,34 +51,21 @@ function addMessage(text, name, senderId) {
   messages.scrollTop = messages.scrollHeight;
 }
 
-// 📨 SEND MESSAGE (FIXED)
-function sendMessage() {
-  const input = document.getElementById("input");
+// 📜 LOAD HISTORY
+channel.history({ limit: 50 }, (err, result) => {
+  if (err) return console.error(err);
 
-  if (!input || input.value.trim() === "") return;
-
-  const text = input.value.trim();
-
-  console.log("📤 Sending:", text);
-
-  // ✅ SHOW MESSAGE IMMEDIATELY
-  addMessage(text, username, clientId);
-
-  // send to Ably
-  channel.publish("message", {
-    text: text,
-    username: username,
-    sender: clientId
+  result.items.reverse().forEach(msg => {
+    addMessage(
+      msg.data.text,
+      msg.data.username,
+      msg.data.sender
+    );
   });
+});
 
-  input.value = "";
-}
-
-// 📥 RECEIVE MESSAGES
+// 📥 receive
 channel.subscribe("message", (msg) => {
-  console.log("📩 Received:", msg);
-
-  // ❌ skip your own messages (already shown)
   if (msg.data.sender === clientId) return;
 
   addMessage(
@@ -88,18 +75,59 @@ channel.subscribe("message", (msg) => {
   );
 });
 
-// ⌨️ ENTER TO SEND
+// 📨 send
+function sendMessage() {
+  const input = document.getElementById("input");
+
+  if (!input.value.trim()) return;
+
+  const text = input.value.trim();
+
+  addMessage(text, username, clientId);
+
+  channel.publish("message", {
+    text,
+    username,
+    sender: clientId
+  });
+
+  input.value = "";
+}
+
+// ⌨️ enter to send
 document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("input");
 
-  if (input) {
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        sendMessage();
-      }
-    });
-  }
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
 });
 
-// 🧪 TEST MESSAGE (should ALWAYS show)
-addMessage("✅ Chat is working", "System", "system");
+// 🟢 presence join
+presence.presence.enter({ username });
+
+// update users
+function updateUsers() {
+  presence.presence.get((err, members) => {
+    if (err) return;
+
+    const usersDiv = document.getElementById("users");
+    usersDiv.innerHTML = "";
+
+    members.forEach(member => {
+      const div = document.createElement("div");
+      div.classList.add("user");
+
+      div.innerHTML = `
+        <div class="dot"></div>
+        ${member.data.username}
+      `;
+
+      usersDiv.appendChild(div);
+    });
+  });
+}
+
+// listen for presence changes
+presence.presence.subscribe(updateUsers);
+setTimeout(updateUsers, 1000);
